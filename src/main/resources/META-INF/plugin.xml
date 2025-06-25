@@ -1,0 +1,29 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+	<!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+	<id>com.sarhan.jira-actions-plugin</id>
+
+	<name>Jira Actions</name>
+	<description>Jira Actions.</description>
+	<!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+	<vendor email="akmal.sarhan@gmail.com" url="https://github.com/akmalSar">Akmal Sarhan</vendor>
+
+	<!-- Product and plugin compatibility requirements.
+		 Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+	<depends>com.intellij.modules.platform</depends>
+	<depends>Git4Idea</depends>
+	<!-- Extension points defined by the plugin.
+		 Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+	<extensions defaultExtensionNs="com.intellij">
+		<applicationService serviceImplementation="com.sarhan.intellij.plugin.jira.settings.JiraActionsPluginSettings"/>
+		<vcsCheckinHandlerFactory implementation="com.sarhan.intellij.plugin.jira.commit.GitVcsCheckinHandlerFactory"/>
+		<statusBarWidgetFactory
+				implementation="com.sarhan.intellij.plugin.jira.statusbar.CustomStatusBarWidgetFactory"
+				id="CustomStatusBarWidget"
+				order="before gotoline"/>
+		<applicationConfigurable groupId="tools"
+								 instance="com.sarhan.intellij.plugin.jira.settings.JiraConfigurationDialog"
+								 id="com.sarhan.intellij.plugin.jira.settings.JiraConfigurationDialog"
+								 displayName="Jira Actions"/>
+	</extensions>
+</idea-plugin>

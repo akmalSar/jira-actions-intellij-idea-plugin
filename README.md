@@ -1,0 +1,15 @@
+<!-- Plugin description -->
+# 🔀 Jira Actions
+
+**Jira Actions** is an IntelliJ plugin that helps you with commit messages, navigation to the jira Ticket, pullrequests etc  
+
+---
+
+## ✨ Features
+
+- ✅ **extract JIRA Ticket number from branch name and add it automatically as the first line to the commit**
+- ✅ **navigate to the JIRA Ticket by clicking on the bug symbol in the bottom status bar**
+
+---
+<!-- Plugin description end -->
+

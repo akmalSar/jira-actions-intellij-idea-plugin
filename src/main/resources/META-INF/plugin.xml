@@ -3,8 +3,8 @@
 	<!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
 	<id>com.sarhan.jira-actions-plugin</id>
 
-	<name>Jira Actions</name>
-	<description>Jira Actions.</description>
+	<name>JiraActions</name>
+	<description>Jira Actions is an IntelliJ plugin that helps you with commit messages, navigation to the jira Ticket, pullrequests</description>
 	<!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
 	<vendor email="akmal.sarhan@gmail.com" url="https://github.com/akmalSar">Akmal Sarhan</vendor>
 

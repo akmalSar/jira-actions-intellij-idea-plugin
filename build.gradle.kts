@@ -4,7 +4,7 @@ plugins {
     id("java")
     id("checkstyle")
     alias(libs.plugins.changelog) // Gradle Changelog Plugin
-    id("io.spring.javaformat") version "0.0.43"
+    id("io.spring.javaformat") version "0.0.47"
     alias(libs.plugins.kotlin) // Kotlin support
     alias(libs.plugins.intelliJPlatform) // IntelliJ Platform Gradle Plugin
 }
@@ -56,8 +56,7 @@ checkstyle {
 }
 // Dependencies are managed with Gradle version catalog - read more: https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog
 dependencies {
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3")
-    checkstyle("io.spring.javaformat:spring-javaformat-checkstyle:0.0.43")
+    checkstyle("io.spring.javaformat:spring-javaformat-checkstyle:0.0.47")
     // JUnit Jupiter (JUnit 5)
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

@@ -25,5 +25,7 @@
 								 instance="com.sarhan.intellij.plugin.jira.settings.JiraConfigurationDialog"
 								 id="com.sarhan.intellij.plugin.jira.settings.JiraConfigurationDialog"
 								 displayName="Jira Actions"/>
+		<notificationGroup id="JIRA ACTIONS Plugin"
+						   displayType="BALLOON"/>
 	</extensions>
 </idea-plugin>

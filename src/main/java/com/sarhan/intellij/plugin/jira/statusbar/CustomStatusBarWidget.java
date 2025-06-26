@@ -26,6 +26,7 @@ import javax.swing.Icon;
 import com.intellij.ide.BrowserUtil;
 import com.intellij.notification.Notification;
 import com.intellij.notification.NotificationGroup;
+import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.wm.StatusBar;
@@ -75,7 +76,7 @@ public class CustomStatusBarWidget implements StatusBarWidget, StatusBarWidget.I
 	// Lazy initialization of notification group
 	private NotificationGroup getNotificationGroup() {
 		if (this.notificationGroup == null) {
-			this.notificationGroup = NotificationGroup.balloonGroup("JIRA Ticket Plugin");
+			this.notificationGroup = NotificationGroupManager.getInstance().getNotificationGroup("JIRA ACTIONS Plugin");
 		}
 		return this.notificationGroup;
 	}

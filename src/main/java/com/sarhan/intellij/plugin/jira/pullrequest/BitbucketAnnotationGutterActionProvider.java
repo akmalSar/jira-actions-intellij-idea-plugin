@@ -71,7 +71,7 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 
 	// Pattern to match Bitbucket Server URLs
 	private static final Pattern BITBUCKET_URL_PATTERN = Pattern
-		.compile("^https?://([^/]+)/(?:scm/)?([^/]+)/([^/]+)(?:\\.git)?/?$");
+			.compile("^https?://([^/]+)/(?:scm/)?([^/]+)/([^/]+)(?:\\.git)?/?$");
 
 	// Pattern to extract pull request info from commit messages
 	private static final Pattern PR_PATTERN = Pattern.compile(
@@ -91,41 +91,6 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 		// Return the action without checking repository synchronously
 		// The repository check will be done asynchronously when the action is performed
 		return new BitbucketPullRequestAction(project, annotation, file);
-	}
-
-	private @Nullable String getBitbucketServerUrl(@NotNull GitRepository repository) {
-		try {
-			// Try to get the origin remote URL
-			String remoteUrl = repository.getRemotes()
-				.stream()
-				.filter((GitRemote remote) -> "origin".equals(remote.getName())
-						|| remote.getName().toLowerCase().contains("bitbucket"))
-				.findFirst()
-				.map(GitRemote::getFirstUrl)
-				.orElse(null);
-
-			if (remoteUrl == null) {
-				return null;
-			}
-
-			// Convert SSH URL to HTTPS if needed
-			if (remoteUrl.startsWith("git@")) {
-				// Convert git@server:project/repo.git to https://server/project/repo
-				remoteUrl = remoteUrl.replace("git@", "https://").replace(":", "/").replaceAll("\\.git$", "");
-			}
-
-			// Validate it's a Bitbucket Server URL
-			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(remoteUrl);
-			if (matcher.matches()) {
-				return remoteUrl;
-			}
-
-		}
-		catch (Exception exception) {
-			LOG.warn("Failed to get Bitbucket URL", exception);
-		}
-
-		return null;
 	}
 
 	private static class BitbucketPullRequestAction extends AnAction {
@@ -158,7 +123,7 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 				try {
 					// Check if this is a Git repository (now safe to call off EDT)
 					GitRepository repository = GitUtil.getRepositoryManager(this.project)
-						.getRepositoryForFile(this.file);
+							.getRepositoryForFile(this.file);
 					if (repository == null) {
 						LOG.info("No Git repository found for file: " + this.file.getPath());
 						return;
@@ -202,17 +167,17 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 			try {
 				// Try to get the origin remote URL
 				String remoteUrl = repository.getRemotes()
-					.stream()
-					.filter((GitRemote remote) -> "origin".equals(remote.getName())
-							|| remote.getName().toLowerCase().contains("bitbucket"))
-					.findFirst()
-					.map(GitRemote::getFirstUrl)
-					.orElse(null);
+						.stream()
+						.filter((GitRemote remote) -> "origin".equals(remote.getName())
+													  || remote.getName().toLowerCase().contains("bitbucket"))
+						.findFirst()
+						.map(GitRemote::getFirstUrl)
+						.orElse(null);
 
 				if (remoteUrl == null) {
 					return null;
 				}
-
+				remoteUrl = remoteUrl.replaceAll("\\.git$", "");
 				// Convert SSH URL to HTTPS if needed
 				if (remoteUrl.startsWith("git@")) {
 					// Convert git@server:project/repo.git to https://server/project/repo

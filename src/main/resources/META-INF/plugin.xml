@@ -15,6 +15,9 @@
 	<!-- Extension points defined by the plugin.
 		 Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
 	<extensions defaultExtensionNs="com.intellij">
+		<vcsAnnotationGutterActionProvider
+				implementation="com.sarhan.intellij.plugin.jira.pullrequest.BitbucketAnnotationGutterActionProvider"/>
+
 		<applicationService serviceImplementation="com.sarhan.intellij.plugin.jira.settings.JiraActionsPluginSettings"/>
 		<vcsCheckinHandlerFactory implementation="com.sarhan.intellij.plugin.jira.commit.GitVcsCheckinHandlerFactory"/>
 		<statusBarWidgetFactory

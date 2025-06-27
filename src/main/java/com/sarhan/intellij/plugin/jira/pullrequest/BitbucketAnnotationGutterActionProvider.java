@@ -39,9 +39,32 @@ import git4idea.commands.GitCommand;
 import git4idea.commands.GitLineHandler;
 import git4idea.repo.GitRemote;
 import git4idea.repo.GitRepository;
+import icons.TasksIcons;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * Provides an action for the annotation gutter in the editor to open related pull
+ * requests in Bitbucket Server.
+ *
+ * The class implements {@link AnnotationGutterActionProvider} to supply a custom action
+ * that integrates with Bitbucket repositories, allowing users to directly navigate to
+ * associated pull requests or commits from annotated lines in the editor.
+ *
+ * Features include: - Asynchronous repository operations to prevent blocking the UI. -
+ * Automatic detection and conversion of repository URLs to Bitbucket Server format. -
+ * Extraction of pull request numbers from commit messages. - Fallback to commit URLs if
+ * no pull request is found.
+ *
+ * Actions are supplied through {@link BitbucketPullRequestAction}, which handles locating
+ * and navigating to the appropriate Bitbucket entity.
+ *
+ * Dependencies: - This implementation is specific to Git as the VCS and Bitbucket Server
+ * as the repository host. - Relies on IntelliJ Platform SDK components like
+ * {@link GitUtil}, {@link FileAnnotation}, and {@link AnActionEvent}.
+ *
+ * @author Akmal Sarhan
+ */
 public class BitbucketAnnotationGutterActionProvider implements AnnotationGutterActionProvider {
 
 	private static final Logger LOG = Logger.getInstance(BitbucketAnnotationGutterActionProvider.class);
@@ -65,19 +88,9 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 			return null;
 		}
 
-		// Check if this is a Git repository
-		GitRepository repository = GitUtil.getRepositoryManager(project).getRepositoryForFile(file);
-		if (repository == null) {
-			return null;
-		}
-
-		// Get Bitbucket Server URL from remote
-		String bitbucketUrl = getBitbucketServerUrl(repository);
-		if (bitbucketUrl == null) {
-			return null;
-		}
-
-		return new BitbucketPullRequestAction(project, repository, annotation, bitbucketUrl);
+		// Return the action without checking repository synchronously
+		// The repository check will be done asynchronously when the action is performed
+		return new BitbucketPullRequestAction(project, annotation, file);
 	}
 
 	private @Nullable String getBitbucketServerUrl(@NotNull GitRepository repository) {
@@ -119,19 +132,17 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 
 		private final Project project;
 
-		private final GitRepository repository;
-
 		private final FileAnnotation annotation;
 
-		private final String bitbucketBaseUrl;
+		private final VirtualFile file;
 
-		BitbucketPullRequestAction(@NotNull Project project, @NotNull GitRepository repository,
-				@NotNull FileAnnotation annotation, @NotNull String bitbucketBaseUrl) {
-			super("Open Pull Request in Bitbucket", "Open the pull request for this commit in Bitbucket Server", null);
+		BitbucketPullRequestAction(@NotNull Project project, @NotNull FileAnnotation annotation,
+				@NotNull VirtualFile file) {
+			super("Open Pull Request in Bitbucket", "Open the pull request for this commit in Bitbucket Server",
+					TasksIcons.Bug);
 			this.project = project;
-			this.repository = repository;
 			this.annotation = annotation;
-			this.bitbucketBaseUrl = bitbucketBaseUrl;
+			this.file = file;
 		}
 
 		@Override
@@ -142,8 +153,23 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 				return;
 			}
 
+			// Perform all repository operations asynchronously
 			ApplicationManager.getApplication().executeOnPooledThread(() -> {
 				try {
+					// Check if this is a Git repository (now safe to call off EDT)
+					GitRepository repository = GitUtil.getRepositoryManager(this.project)
+						.getRepositoryForFile(this.file);
+					if (repository == null) {
+						LOG.info("No Git repository found for file: " + this.file.getPath());
+						return;
+					}
+
+					// Get Bitbucket Server URL from remote
+					String bitbucketBaseUrl = getBitbucketServerUrl(repository);
+					if (bitbucketBaseUrl == null) {
+						LOG.info("No Bitbucket Server URL found for repository");
+						return;
+					}
 
 					VcsRevisionNumber revision = this.annotation.getLineRevisionNumber(lineNumber);
 					if (revision == null) {
@@ -151,19 +177,19 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 					}
 
 					String commitHash = revision.asString();
-					String commitMessage = getCommitMessage(commitHash);
+					String commitMessage = getCommitMessage(repository, commitHash);
 
 					if (commitMessage != null) {
 						Integer prNumber = extractPullRequestNumber(commitMessage);
 						if (prNumber != null) {
-							String prUrl = buildPullRequestUrl(prNumber);
+							String prUrl = buildPullRequestUrl(bitbucketBaseUrl, prNumber);
 							SwingUtilities.invokeLater(() -> BrowserUtil.browse(prUrl));
 							return;
 						}
 					}
 
 					// Fallback: try to find PR by commit hash
-					findPullRequestByCommit(commitHash);
+					findPullRequestByCommit(bitbucketBaseUrl, commitHash);
 
 				}
 				catch (Exception ex) {
@@ -172,15 +198,48 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 			});
 		}
 
-		private @Nullable Integer getLineNumberFromContext(@NotNull AnActionEvent e) {
+		private String getBitbucketServerUrl(@NotNull GitRepository repository) {
+			try {
+				// Try to get the origin remote URL
+				String remoteUrl = repository.getRemotes()
+					.stream()
+					.filter((GitRemote remote) -> "origin".equals(remote.getName())
+							|| remote.getName().toLowerCase().contains("bitbucket"))
+					.findFirst()
+					.map(GitRemote::getFirstUrl)
+					.orElse(null);
 
-			return ShowAnnotateOperationsPopup.getAnnotationLineNumber(e.getDataContext());
+				if (remoteUrl == null) {
+					return null;
+				}
 
+				// Convert SSH URL to HTTPS if needed
+				if (remoteUrl.startsWith("git@")) {
+					// Convert git@server:project/repo.git to https://server/project/repo
+					remoteUrl = remoteUrl.replace("git@", "https://").replace(":", "/").replaceAll("\\.git$", "");
+				}
+
+				// Validate it's a Bitbucket Server URL
+				Matcher matcher = BITBUCKET_URL_PATTERN.matcher(remoteUrl);
+				if (matcher.matches()) {
+					return remoteUrl;
+				}
+
+			}
+			catch (Exception exception) {
+				LOG.warn("Failed to get Bitbucket URL", exception);
+			}
+
+			return null;
 		}
 
-		private @Nullable String getCommitMessage(@NotNull String commitHash) {
+		private @Nullable Integer getLineNumberFromContext(@NotNull AnActionEvent e) {
+			return ShowAnnotateOperationsPopup.getAnnotationLineNumber(e.getDataContext());
+		}
+
+		private @Nullable String getCommitMessage(@NotNull GitRepository repository, @NotNull String commitHash) {
 			try {
-				GitLineHandler handler = new GitLineHandler(this.project, this.repository.getRoot(), GitCommand.LOG);
+				GitLineHandler handler = new GitLineHandler(this.project, repository.getRoot(), GitCommand.LOG);
 				handler.addParameters("--format=%B", "-n", "1", commitHash);
 
 				String result = Git.getInstance().runCommand(handler).getOutputOrThrow();
@@ -211,9 +270,9 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 			return null;
 		}
 
-		private @NotNull String buildPullRequestUrl(int prNumber) {
+		private @NotNull String buildPullRequestUrl(@NotNull String bitbucketBaseUrl, int prNumber) {
 			// Extract project and repo from URL
-			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(this.bitbucketBaseUrl);
+			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(bitbucketBaseUrl);
 			if (matcher.matches()) {
 				String server = matcher.group(1);
 				String project = matcher.group(2);
@@ -224,13 +283,13 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 			}
 
 			// Fallback
-			return this.bitbucketBaseUrl + "/pull-requests/" + prNumber;
+			return bitbucketBaseUrl + "/pull-requests/" + prNumber;
 		}
 
-		private void findPullRequestByCommit(@NotNull String commitHash) {
+		private void findPullRequestByCommit(@NotNull String bitbucketBaseUrl, @NotNull String commitHash) {
 			// This would require Bitbucket REST API integration
 			// For now, open the commit view
-			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(this.bitbucketBaseUrl);
+			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(bitbucketBaseUrl);
 			if (matcher.matches()) {
 				String server = matcher.group(1);
 				String project = matcher.group(2);

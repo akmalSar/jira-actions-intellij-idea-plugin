@@ -47,6 +47,7 @@ import com.intellij.openapi.vcs.actions.ShowAnnotateOperationsPopup;
 import com.intellij.openapi.vcs.annotate.FileAnnotation;
 import com.intellij.openapi.vcs.history.VcsRevisionNumber;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.vcs.log.VcsLogDataKeys;
 import com.sarhan.intellij.plugin.jira.settings.JiraActionsPluginSettings;
 import git4idea.GitUtil;
 import git4idea.repo.GitRemote;
@@ -90,6 +91,18 @@ class BitbucketPullRequestAction extends AnAction {
 
 	private final VirtualFile file;
 
+	BitbucketPullRequestAction() {
+		super("Show Pull Requests for Commit", "Show pull requests for this commit from Bitbucket Server",
+				TasksIcons.Bug);
+		this.project = null;
+		this.annotation = null;
+		this.file = null;
+		LOG.warn("BitbucketPullRequestAction created with no project, annotation, or file");
+		LOG.warn("This should not happen and may cause unexpected behavior");
+		LOG.warn("Please report this issue to the author of the plugin");
+		LOG.warn("https://github.com/sarhan-sarhan/intellij-jira-actions-plugin");
+	}
+
 	BitbucketPullRequestAction(@NotNull Project project, @NotNull FileAnnotation annotation,
 			@NotNull VirtualFile file) {
 		super("Show Pull Requests for Commit", "Show pull requests for this commit from Bitbucket Server",
@@ -102,13 +115,35 @@ class BitbucketPullRequestAction extends AnAction {
 	@Override
 	public void actionPerformed(@NotNull AnActionEvent e) {
 		Integer lineNumber = getLineNumberFromContext(e);
+		String vsHash;
 		if (lineNumber == null) {
 			return;
 		}
-
+		if ((lineNumber < 0) && (e.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION) != null)) {
+			vsHash = e.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION)
+				.getCachedFullDetails()
+				.get(0)
+				.getId()
+				.asString();
+		}
+		else {
+			vsHash = null;
+		}
 		ApplicationManager.getApplication().executeOnPooledThread(() -> {
 			try {
-				GitRepository repository = GitUtil.getRepositoryManager(this.project).getRepositoryForFile(this.file);
+				GitRepository repository = null;
+				if (this.file != null) {
+					repository = GitUtil.getRepositoryManager(this.project).getRepositoryForFile(this.file);
+				}
+				else {
+
+					List<GitRepository> repositories = GitUtil.getRepositoryManager(e.getProject()).getRepositories();
+					if (repositories.isEmpty()) {
+						LOG.info("No Git repositories found");
+						return;
+					}
+					repository = repositories.get(0);
+				}
 				if (repository == null) {
 					LOG.info("No Git repository found for file: " + this.file.getPath());
 					return;
@@ -119,20 +154,27 @@ class BitbucketPullRequestAction extends AnAction {
 					LOG.info("No Bitbucket Server URL found for repository");
 					return;
 				}
+				VcsRevisionNumber revision = null;
+				String commitHash = null;
+				if (this.annotation != null) {
+					revision = this.annotation.getLineRevisionNumber(lineNumber);
+					commitHash = revision.asString();
+				}
 
-				VcsRevisionNumber revision = this.annotation.getLineRevisionNumber(lineNumber);
-				if (revision == null) {
+				if ((revision == null) && (vsHash == null)) {
 					return;
 				}
 
-				String commitHash = revision.asString();
+				if (vsHash != null) {
+					commitHash = vsHash;
+				}
 
 				// Get pull requests for this commit
 				List<PullRequest> pullRequests = getPullRequestsForCommit(bitbucketBaseUrl, commitHash);
 
 				SwingUtilities.invokeLater(() -> {
 					if (pullRequests.isEmpty()) {
-						showNoPullRequestsMessage();
+						showNoPullRequestsMessage(e);
 					}
 					else {
 						showPullRequestsPopup(e, pullRequests);
@@ -143,7 +185,7 @@ class BitbucketPullRequestAction extends AnAction {
 			catch (Exception ex) {
 				LOG.warn("Failed to retrieve pull requests", ex);
 				SwingUtilities
-					.invokeLater(() -> showErrorMessage("Failed to retrieve pull requests: " + ex.getMessage()));
+					.invokeLater(() -> showErrorMessage(e, "Failed to retrieve pull requests: " + ex.getMessage()));
 			}
 		});
 	}
@@ -282,18 +324,18 @@ class BitbucketPullRequestAction extends AnAction {
 		ListPopup popup = JBPopupFactory.getInstance().createListPopup(step);
 
 		// Show popup in the center of the screen
-		popup.showCenteredInCurrentWindow(this.project);
+		popup.showCenteredInCurrentWindow(e.getProject());
 	}
 
-	private void showNoPullRequestsMessage() {
+	private void showNoPullRequestsMessage(@NotNull AnActionEvent e) {
 		JBPopupFactory.getInstance()
 			.createMessage(
 					"No pull requests found for this commit or no token configured in settings -> tools -> JIRA Actions")
-			.showCenteredInCurrentWindow(this.project);
+			.showCenteredInCurrentWindow(e.getProject());
 	}
 
-	private void showErrorMessage(@NotNull String message) {
-		JBPopupFactory.getInstance().createMessage(message).showCenteredInCurrentWindow(this.project);
+	private void showErrorMessage(@NotNull AnActionEvent e, @NotNull String message) {
+		JBPopupFactory.getInstance().createMessage(message).showCenteredInCurrentWindow(e.getProject());
 	}
 
 	private String getBitbucketServerUrl(@NotNull GitRepository repository) {

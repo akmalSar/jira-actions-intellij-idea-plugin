@@ -31,4 +31,10 @@
 		<notificationGroup id="JIRA ACTIONS Plugin"
 						   displayType="BALLOON"/>
 	</extensions>
+	<actions>
+		<action id="JiraActions.FindPullRequests"
+				class="com.sarhan.intellij.plugin.jira.pullrequest.BitbucketPullRequestAction">
+			<add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
+		</action>
+	</actions>
 </idea-plugin>

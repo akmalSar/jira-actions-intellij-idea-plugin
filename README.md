@@ -8,7 +8,7 @@
 
 - ✅ **extract JIRA Ticket number from branch name and add it automatically as the first line to the commit**
 - ✅ **navigate to the JIRA Ticket by clicking on the bug symbol in the bottom status bar**
-- ✅ **show pull requests for commit in the annotate with Git Blame gutter**
+- ✅ **show pull requests for commit in git log and annotate with Git Blame gutter**
 ---
 <!-- Plugin description end -->
 

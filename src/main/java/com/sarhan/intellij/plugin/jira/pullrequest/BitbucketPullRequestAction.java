@@ -18,11 +18,13 @@ package com.sarhan.intellij.plugin.jira.pullrequest;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,56 +56,63 @@ import git4idea.repo.GitRemote;
 import git4idea.repo.GitRepository;
 import icons.TasksIcons;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 /**
  * The BitbucketPullRequestAction class defines a custom action to retrieve and display
  * pull requests associated with a specific Git commit. It integrates with Bitbucket
  * Server to query information about pull requests based on a commit hash fetched from
  * annotated files.
- *
+ * <p>
  * This action leverages the IntelliJ Platform's AnAction framework to provide
  * functionality within an integrated development environment, allowing users to trigger
  * the action through the IDE's interface.
- *
+ * <p>
  * Key functionality includes: - Extracting the repository details from the Git remote. -
  * Making REST API calls to a configured Bitbucket Server endpoint to fetch pull requests.
  * - Parsing the API response to display a list of pull requests linked to the commit. -
  * Displaying appropriate messages or errors if no pull requests are found or if issues
  * occur.
- *
+ * <p>
  * The action relies on the project's context, file annotations, and file state to
  * determine the line and commit hash for which pull request data is retrieved.
  *
  * @author Akmal Sarhan
  */
-class BitbucketPullRequestAction extends AnAction {
+public class BitbucketPullRequestAction extends AnAction {
 
 	private static final Logger LOG = Logger.getInstance(BitbucketPullRequestAction.class);
 
-	// Pattern to match Bitbucket Server URLs
+	// Constants
 	private static final Pattern BITBUCKET_URL_PATTERN = Pattern
 		.compile("^https?://([^/]+)/(?:scm/)?([^/]+)/([^/]+)(?:\\.git)?/?$");
 
+	private static final String API_PATH_TEMPLATE = "https://%s/rest/api/latest/projects/%s/repos/%s/commits/%s/pull-requests?start=0&limit=25";
+
+	private static final String PR_URL_TEMPLATE = "https://%s/projects/%s/repos/%s/pull-requests/%d";
+
+	private static final int HTTP_OK = 200;
+
+	private static final String BEARER_PREFIX = "Bearer ";
+
+	// Dependencies
 	private final Project project;
 
 	private final FileAnnotation annotation;
 
 	private final VirtualFile file;
 
-	BitbucketPullRequestAction() {
+	// Default constructor for action registration
+	public BitbucketPullRequestAction() {
 		super("Show Pull Requests for Commit", "Show pull requests for this commit from Bitbucket Server",
 				TasksIcons.Bug);
 		this.project = null;
 		this.annotation = null;
 		this.file = null;
-		LOG.warn("BitbucketPullRequestAction created with no project, annotation, or file");
-		LOG.warn("This should not happen and may cause unexpected behavior");
-		LOG.warn("Please report this issue to the author of the plugin");
-		LOG.warn("https://github.com/sarhan-sarhan/intellij-jira-actions-plugin");
+		logConstructorWarning();
 	}
 
-	BitbucketPullRequestAction(@NotNull Project project, @NotNull FileAnnotation annotation,
+	// Main constructor
+	public BitbucketPullRequestAction(@NotNull Project project, @NotNull FileAnnotation annotation,
 			@NotNull VirtualFile file) {
 		super("Show Pull Requests for Commit", "Show pull requests for this commit from Bitbucket Server",
 				TasksIcons.Bug);
@@ -113,193 +122,239 @@ class BitbucketPullRequestAction extends AnAction {
 	}
 
 	@Override
-	public void actionPerformed(@NotNull AnActionEvent e) {
-		Integer lineNumber = getLineNumberFromContext(e);
-		String vsHash;
-		if (lineNumber == null) {
-			return;
-		}
-		if ((lineNumber < 0) && (e.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION) != null)) {
-			vsHash = e.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION)
-				.getCachedFullDetails()
-				.get(0)
-				.getId()
-				.asString();
-		}
-		else {
-			vsHash = null;
-		}
+	public void actionPerformed(@NotNull AnActionEvent event) {
 		ApplicationManager.getApplication().executeOnPooledThread(() -> {
 			try {
-				GitRepository repository = null;
-				if (this.file != null) {
-					repository = GitUtil.getRepositoryManager(this.project).getRepositoryForFile(this.file);
-				}
-				else {
-
-					List<GitRepository> repositories = GitUtil.getRepositoryManager(e.getProject()).getRepositories();
-					if (repositories.isEmpty()) {
-						LOG.info("No Git repositories found");
-						return;
-					}
-					repository = repositories.get(0);
-				}
-				if (repository == null) {
-					LOG.info("No Git repository found for file: " + this.file.getPath());
-					return;
-				}
-
-				String bitbucketBaseUrl = getBitbucketServerUrl(repository);
-				if (bitbucketBaseUrl == null) {
-					LOG.info("No Bitbucket Server URL found for repository");
-					return;
-				}
-				VcsRevisionNumber revision = null;
-				String commitHash = null;
-				if (this.annotation != null) {
-					revision = this.annotation.getLineRevisionNumber(lineNumber);
-					commitHash = revision.asString();
-				}
-
-				if ((revision == null) && (vsHash == null)) {
-					return;
-				}
-
-				if (vsHash != null) {
-					commitHash = vsHash;
-				}
-
-				// Get pull requests for this commit
-				List<PullRequest> pullRequests = getPullRequestsForCommit(bitbucketBaseUrl, commitHash);
-
-				SwingUtilities.invokeLater(() -> {
-					if (pullRequests.isEmpty()) {
-						showNoPullRequestsMessage(e);
-					}
-					else {
-						showPullRequestsPopup(e, pullRequests);
-					}
-				});
-
+				handleActionPerformed(event);
 			}
 			catch (Exception ex) {
 				LOG.warn("Failed to retrieve pull requests", ex);
 				SwingUtilities
-					.invokeLater(() -> showErrorMessage(e, "Failed to retrieve pull requests: " + ex.getMessage()));
+					.invokeLater(() -> showErrorMessage(event, "Failed to retrieve pull requests: " + ex.getMessage()));
 			}
 		});
 	}
 
-	private List<PullRequest> getPullRequestsForCommit(@NotNull String bitbucketBaseUrl, @NotNull String commitHash) {
-		List<PullRequest> pullRequests = new ArrayList<>();
+	private void handleActionPerformed(@NotNull AnActionEvent event) {
+		String commitHash = getCommitHash(event);
+		if (commitHash == null) {
+			LOG.debug("No commit hash found for the current context");
+			return;
+		}
 
-		try {
-			// Extract project and repo from URL
-			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(bitbucketBaseUrl);
-			if (!matcher.matches()) {
-				LOG.warn("Could not parse Bitbucket URL: " + bitbucketBaseUrl);
-				return pullRequests;
-			}
+		GitRepository repository = findGitRepository(event);
+		if (repository == null) {
+			LOG.info("No Git repository found");
+			return;
+		}
 
-			String server = matcher.group(1);
-			String project = matcher.group(2);
-			String repo = matcher.group(3);
+		String bitbucketBaseUrl = getBitbucketServerUrl(repository);
+		if (bitbucketBaseUrl == null) {
+			LOG.info("No Bitbucket Server URL found for repository");
+			return;
+		}
 
-			// Build the REST API URL
-			String apiUrl = String.format(
-					"https://%s/rest/api/latest/projects/%s/repos/%s/commits/%s/pull-requests?start=0&limit=25", server,
-					project.toUpperCase(), repo, commitHash);
+		List<PullRequest> pullRequests = getPullRequestsForCommit(bitbucketBaseUrl, commitHash);
 
-			// Get the token from settings
-			JiraActionsPluginSettings settings = JiraActionsPluginSettings.getInstance();
-			String token = settings.getState().token; // Assuming this method exists
-
-			if ((token == null) || token.trim().isEmpty()) {
-				LOG.warn("No Bitbucket token configured");
-				return pullRequests;
-			}
-
-			// Make the API request
-			URL url = new URL(apiUrl);
-			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-			connection.setRequestMethod("GET");
-			connection.setRequestProperty("Authorization", "Bearer " + token);
-			connection.setRequestProperty("Accept", "application/json");
-
-			int responseCode = connection.getResponseCode();
-			if (responseCode == 200) {
-				// Read the response
-				StringBuilder response = new StringBuilder();
-				try (BufferedReader reader = new BufferedReader(
-						new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-					String line;
-					while ((line = reader.readLine()) != null) {
-						response.append(line);
-					}
-				}
-
-				// Parse JSON response
-				pullRequests = parsePullRequestsResponse(response.toString(), bitbucketBaseUrl);
-
+		SwingUtilities.invokeLater(() -> {
+			if (pullRequests.isEmpty()) {
+				showNoPullRequestsMessage(event);
 			}
 			else {
-				LOG.warn("API request failed with response code: " + responseCode);
-				// Try to read error response
-				try (BufferedReader reader = new BufferedReader(
-						new InputStreamReader(connection.getErrorStream(), StandardCharsets.UTF_8))) {
-					String line;
-					StringBuilder errorResponse = new StringBuilder();
-					while ((line = reader.readLine()) != null) {
-						errorResponse.append(line);
-					}
-					LOG.warn("Error response: " + errorResponse.toString());
-				}
-				catch (Exception exception) {
-					// Ignore if we can't read error stream
-				}
+				showPullRequestsPopup(event, pullRequests);
+			}
+		});
+	}
+
+	private String getCommitHash(@NotNull AnActionEvent event) {
+		Integer lineNumber = getLineNumberFromContext(event);
+
+		// Try to get commit from VCS log selection first
+		String vcsLogCommit = getCommitFromVcsLog(event, lineNumber);
+		if (vcsLogCommit != null) {
+			return vcsLogCommit;
+		}
+
+		// Fall back to annotation if available
+		return getCommitFromAnnotation(lineNumber);
+	}
+
+	private String getCommitFromVcsLog(@NotNull AnActionEvent event, Integer lineNumber) {
+		if ((lineNumber != null) && (lineNumber >= 0)) {
+			return null; // Use annotation for positive line numbers
+		}
+
+		var commitSelection = event.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION);
+		if ((commitSelection != null) && !commitSelection.getCachedFullDetails().isEmpty()) {
+			return commitSelection.getCachedFullDetails().get(0).getId().asString();
+		}
+
+		return null;
+	}
+
+	private String getCommitFromAnnotation(Integer lineNumber) {
+		if ((lineNumber == null) || (lineNumber < 0) || (this.annotation == null)) {
+			return null;
+		}
+
+		VcsRevisionNumber revision = this.annotation.getLineRevisionNumber(lineNumber);
+		return (revision != null) ? revision.asString() : null;
+	}
+
+	private GitRepository findGitRepository(@NotNull AnActionEvent event) {
+		if (this.file != null) {
+			return GitUtil.getRepositoryManager(this.project).getRepositoryForFile(this.file);
+		}
+
+		List<GitRepository> repositories = GitUtil.getRepositoryManager(event.getProject()).getRepositories();
+		return repositories.isEmpty() ? null : repositories.get(0);
+	}
+
+	private List<PullRequest> getPullRequestsForCommit(@NotNull String bitbucketBaseUrl, @NotNull String commitHash) {
+		try {
+			BitbucketUrlComponents urlComponents = parseBitbucketUrl(bitbucketBaseUrl);
+			if (urlComponents == null) {
+				LOG.warn("Could not parse Bitbucket URL: " + bitbucketBaseUrl);
+				return Collections.emptyList();
 			}
 
+			String apiUrl = buildApiUrl(urlComponents, commitHash);
+			String authToken = getAuthToken();
+
+			if ((authToken == null) || authToken.trim().isEmpty()) {
+				LOG.warn("No Bitbucket token configured");
+				return Collections.emptyList();
+			}
+
+			return fetchPullRequests(apiUrl, authToken, bitbucketBaseUrl);
+
 		}
-		catch (IOException ioException) {
-			LOG.warn("Failed to make API request", ioException);
+		catch (Exception ex) {
+			LOG.warn("Failed to get pull requests for commit: " + commitHash, ex);
+			return Collections.emptyList();
+		}
+	}
+
+	private BitbucketUrlComponents parseBitbucketUrl(@NotNull String bitbucketBaseUrl) {
+		Matcher matcher = BITBUCKET_URL_PATTERN.matcher(bitbucketBaseUrl);
+		if (!matcher.matches()) {
+			return null;
 		}
 
-		return pullRequests;
+		return new BitbucketUrlComponents(matcher.group(1), // server
+				matcher.group(2), // project
+				matcher.group(3) // repo
+		);
+	}
+
+	private String buildApiUrl(@NotNull BitbucketUrlComponents components, @NotNull String commitHash) {
+		return String.format(API_PATH_TEMPLATE, components.server(), components.project().toUpperCase(),
+				components.repo(), commitHash);
+	}
+
+	private String getAuthToken() {
+		JiraActionsPluginSettings settings = JiraActionsPluginSettings.getInstance();
+		return settings.getState().token;
+	}
+
+	private List<PullRequest> fetchPullRequests(@NotNull String apiUrl, @NotNull String authToken,
+			@NotNull String bitbucketBaseUrl) throws IOException {
+		HttpURLConnection connection = createConnection(apiUrl, authToken);
+
+		try {
+			int responseCode = connection.getResponseCode();
+			if (responseCode == HTTP_OK) {
+				String response = readResponse(connection.getInputStream());
+				return parsePullRequestsResponse(response, bitbucketBaseUrl);
+			}
+			else {
+				logApiError(connection, responseCode);
+				return Collections.emptyList();
+			}
+		}
+		finally {
+			connection.disconnect();
+		}
+	}
+
+	private HttpURLConnection createConnection(@NotNull String apiUrl, @NotNull String authToken) throws IOException {
+		URL url = new URL(apiUrl);
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestMethod("GET");
+		connection.setRequestProperty("Authorization", BEARER_PREFIX + authToken);
+		connection.setRequestProperty("Accept", "application/json");
+		connection.setConnectTimeout(10000); // 10 seconds
+		connection.setReadTimeout(30000); // 30 seconds
+		return connection;
+	}
+
+	private String readResponse(@NotNull InputStream inputStream) throws IOException {
+		StringBuilder response = new StringBuilder();
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+			String line;
+			while ((line = reader.readLine()) != null) {
+				response.append(line);
+			}
+		}
+		return response.toString();
+	}
+
+	private void logApiError(@NotNull HttpURLConnection connection, int responseCode) {
+		LOG.warn("API request failed with response code: " + responseCode);
+		try (InputStream errorStream = connection.getErrorStream()) {
+			if (errorStream != null) {
+				String errorResponse = readResponse(errorStream);
+				LOG.warn("Error response: " + errorResponse);
+			}
+		}
+		catch (IOException ex) {
+			LOG.debug("Could not read error response", ex);
+		}
 	}
 
 	private List<PullRequest> parsePullRequestsResponse(@NotNull String jsonResponse,
 			@NotNull String bitbucketBaseUrl) {
-		List<PullRequest> pullRequests = new ArrayList<>();
-
 		try {
 			Gson gson = new Gson();
 			JsonObject response = gson.fromJson(jsonResponse, JsonObject.class);
 			JsonArray values = response.getAsJsonArray("values");
 
-			if (values != null) {
-				for (JsonElement element : values) {
-					JsonObject pr = element.getAsJsonObject();
-
-					int id = pr.get("id").getAsInt();
-					String title = pr.get("title").getAsString();
-					String state = pr.get("state").getAsString();
-
-					// Build PR URL
-					String prUrl = buildPullRequestUrl(bitbucketBaseUrl, id);
-
-					pullRequests.add(new PullRequest(id, title, state, prUrl));
-				}
+			if (values == null) {
+				return Collections.emptyList();
 			}
 
-		}
-		catch (Exception exception) {
-			LOG.warn("Failed to parse pull requests response", exception);
-		}
+			List<PullRequest> pullRequests = new ArrayList<>();
+			for (JsonElement element : values) {
+				PullRequest pr = parseSinglePullRequest(element.getAsJsonObject(), bitbucketBaseUrl);
+				if (pr != null) {
+					pullRequests.add(pr);
+				}
+			}
+			return pullRequests;
 
-		return pullRequests;
+		}
+		catch (Exception ex) {
+			LOG.warn("Failed to parse pull requests response", ex);
+			return Collections.emptyList();
+		}
 	}
 
-	private void showPullRequestsPopup(@NotNull AnActionEvent e, @NotNull List<PullRequest> pullRequests) {
+	private PullRequest parseSinglePullRequest(@NotNull JsonObject prJson, @NotNull String bitbucketBaseUrl) {
+		try {
+			int id = prJson.get("id").getAsInt();
+			String title = prJson.get("title").getAsString();
+			String state = prJson.get("state").getAsString();
+			String prUrl = buildPullRequestUrl(bitbucketBaseUrl, id);
+
+			return new PullRequest(id, title, state, prUrl);
+		}
+		catch (Exception ex) {
+			LOG.warn("Failed to parse individual pull request", ex);
+			return null;
+		}
+	}
+
+	private void showPullRequestsPopup(@NotNull AnActionEvent event, @NotNull List<PullRequest> pullRequests) {
 		BaseListPopupStep<PullRequest> step = new BaseListPopupStep<PullRequest>("Pull Requests for Commit",
 				pullRequests) {
 			@Override
@@ -322,20 +377,18 @@ class BitbucketPullRequestAction extends AnAction {
 		};
 
 		ListPopup popup = JBPopupFactory.getInstance().createListPopup(step);
-
-		// Show popup in the center of the screen
-		popup.showCenteredInCurrentWindow(e.getProject());
+		popup.showCenteredInCurrentWindow(event.getProject());
 	}
 
-	private void showNoPullRequestsMessage(@NotNull AnActionEvent e) {
+	private void showNoPullRequestsMessage(@NotNull AnActionEvent event) {
 		JBPopupFactory.getInstance()
-			.createMessage(
-					"No pull requests found for this commit or no token configured in settings -> tools -> JIRA Actions")
-			.showCenteredInCurrentWindow(e.getProject());
+			.createMessage("No pull requests found for this commit or no token configured in "
+					+ "settings -> tools -> JIRA Actions")
+			.showCenteredInCurrentWindow(event.getProject());
 	}
 
-	private void showErrorMessage(@NotNull AnActionEvent e, @NotNull String message) {
-		JBPopupFactory.getInstance().createMessage(message).showCenteredInCurrentWindow(e.getProject());
+	private void showErrorMessage(@NotNull AnActionEvent event, @NotNull String message) {
+		JBPopupFactory.getInstance().createMessage(message).showCenteredInCurrentWindow(event.getProject());
 	}
 
 	private String getBitbucketServerUrl(@NotNull GitRepository repository) {
@@ -352,43 +405,52 @@ class BitbucketPullRequestAction extends AnAction {
 				return null;
 			}
 
-			remoteUrl = remoteUrl.replaceAll("\\.git$", "");
-
-			// Convert SSH URL to HTTPS if needed
-			if (remoteUrl.startsWith("git@")) {
-				remoteUrl = remoteUrl.replace("git@", "https://").replace(":", "/").replaceAll("\\.git$", "");
-			}
-
-			// Validate it's a Bitbucket Server URL
-			Matcher matcher = BITBUCKET_URL_PATTERN.matcher(remoteUrl);
-			if (matcher.matches()) {
-				return remoteUrl;
-			}
+			String normalizedUrl = normalizeRemoteUrl(remoteUrl);
+			return isValidBitbucketUrl(normalizedUrl) ? normalizedUrl : null;
 
 		}
-		catch (Exception exception) {
-			LOG.warn("Failed to get Bitbucket URL", exception);
+		catch (Exception ex) {
+			LOG.warn("Failed to get Bitbucket URL", ex);
+			return null;
 		}
-
-		return null;
 	}
 
-	private @Nullable Integer getLineNumberFromContext(@NotNull AnActionEvent e) {
-		return ShowAnnotateOperationsPopup.getAnnotationLineNumber(e.getDataContext());
-	}
+	private String normalizeRemoteUrl(@NotNull String remoteUrl) {
+		String normalized = remoteUrl.replaceAll("\\.git$", "");
 
-	private @NotNull String buildPullRequestUrl(@NotNull String bitbucketBaseUrl, int prNumber) {
-		Matcher matcher = BITBUCKET_URL_PATTERN.matcher(bitbucketBaseUrl);
-		if (matcher.matches()) {
-			String server = matcher.group(1);
-			String project = matcher.group(2);
-			String repo = matcher.group(3);
-
-			return String.format("https://%s/projects/%s/repos/%s/pull-requests/%d", server, project.toUpperCase(),
-					repo, prNumber);
+		// Convert SSH URL to HTTPS if needed
+		if (normalized.startsWith("git@")) {
+			normalized = normalized.replace("git@", "https://").replace(":", "/").replaceAll("\\.git$", "");
 		}
 
+		return normalized;
+	}
+
+	private boolean isValidBitbucketUrl(@NotNull String url) {
+		return BITBUCKET_URL_PATTERN.matcher(url).matches();
+	}
+
+	private Integer getLineNumberFromContext(@NotNull AnActionEvent event) {
+		return ShowAnnotateOperationsPopup.getAnnotationLineNumber(event.getDataContext());
+	}
+
+	private String buildPullRequestUrl(@NotNull String bitbucketBaseUrl, int prNumber) {
+		BitbucketUrlComponents components = parseBitbucketUrl(bitbucketBaseUrl);
+		if (components != null) {
+			return String.format(PR_URL_TEMPLATE, components.server(), components.project().toUpperCase(),
+					components.repo(), prNumber);
+		}
 		return bitbucketBaseUrl + "/pull-requests/" + prNumber;
+	}
+
+	private void logConstructorWarning() {
+		LOG.warn("BitbucketPullRequestAction created with no project, annotation, or file");
+		LOG.warn("This should not happen and may cause unexpected behavior");
+		LOG.warn("Please report this issue: https://github.com/sarhan-sarhan/intellij-jira-actions-plugin");
+	}
+
+	// Helper record for URL components
+	private record BitbucketUrlComponents(String server, String project, String repo) {
 	}
 
 }

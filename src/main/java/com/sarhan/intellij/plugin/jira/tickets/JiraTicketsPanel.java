@@ -65,6 +65,9 @@ public class JiraTicketsPanel extends JPanel {
 		this.table.setShowGrid(true);
 		this.table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
+		// Enable sorting
+		this.table.setAutoCreateRowSorter(true);
+
 		// Set column widths
 		this.table.getColumnModel().getColumn(0).setPreferredWidth(100); // Key
 		this.table.getColumnModel().getColumn(1).setPreferredWidth(300); // Summary
@@ -90,7 +93,10 @@ public class JiraTicketsPanel extends JPanel {
 				if (e.getClickCount() == 1) { // Single click to open
 					int row = JiraTicketsPanel.this.table.rowAtPoint(e.getPoint());
 					if (row >= 0) {
-						JiraTicket ticket = JiraTicketsPanel.this.tableModel.getTicketAt(row);
+						// Convert view row index to model row index (important for
+						// sorting)
+						int modelRow = JiraTicketsPanel.this.table.convertRowIndexToModel(row);
+						JiraTicket ticket = JiraTicketsPanel.this.tableModel.getTicketAt(modelRow);
 						if (ticket != null) {
 							BrowserUtil.browse(ticket.getUrl());
 						}

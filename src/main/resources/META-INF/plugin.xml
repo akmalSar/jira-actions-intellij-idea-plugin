@@ -15,6 +15,11 @@
 	<!-- Extension points defined by the plugin.
 		 Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
 	<extensions defaultExtensionNs="com.intellij">
+		<toolWindow id="My JIRA Tickets"
+					icon="/jira.svg"
+					secondary="true"
+					anchor="bottom"
+					factoryClass="com.sarhan.intellij.plugin.jira.tickets.JiraTicketsToolWindowFactory"/>
 		<vcsAnnotationGutterActionProvider
 				implementation="com.sarhan.intellij.plugin.jira.pullrequest.BitbucketAnnotationGutterActionProvider"/>
 

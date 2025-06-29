@@ -70,11 +70,18 @@ public final class JiraActionsPluginSettings implements PersistentStateComponent
 		public String jiraBaseUrl = "";
 
 		/**
-		 * Represents the access token required for authenticating API requests to JIRA or
-		 * Bitbucket. This token is used to grant the application access to secured
-		 * resources and perform authorized operations with JIRA's API endpoints.
+		 * Represents the access token required for authenticating API requests to JIRA
+		 * This token is used to grant the application access to secured resources and
+		 * perform authorized operations with JIRA's API endpoints.
 		 */
-		public String token = "";
+		public String jiraToken = "";
+
+		/**
+		 * Represents the access token required for authenticating API requests to
+		 * bitbucket This token is used to grant the application access to secured
+		 * resources and perform authorized operations with bitbucket's API endpoints.
+		 */
+		public String bitbucketToken = "";
 
 		public State() {
 		}

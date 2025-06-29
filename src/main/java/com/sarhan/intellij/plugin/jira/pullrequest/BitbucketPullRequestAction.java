@@ -16,13 +16,8 @@
 
 package com.sarhan.intellij.plugin.jira.pullrequest;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -50,6 +45,7 @@ import com.intellij.openapi.vcs.annotate.FileAnnotation;
 import com.intellij.openapi.vcs.history.VcsRevisionNumber;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.vcs.log.VcsLogDataKeys;
+import com.sarhan.intellij.plugin.jira.HttpUtils;
 import com.sarhan.intellij.plugin.jira.settings.JiraActionsPluginSettings;
 import git4idea.GitUtil;
 import git4idea.repo.GitRemote;
@@ -219,7 +215,7 @@ public class BitbucketPullRequestAction extends AnAction {
 			}
 
 			String apiUrl = buildApiUrl(urlComponents, commitHash);
-			String authToken = getAuthToken();
+			String authToken = getBitbucketToken();
 
 			if ((authToken == null) || authToken.trim().isEmpty()) {
 				LOG.warn("No Bitbucket token configured");
@@ -252,64 +248,18 @@ public class BitbucketPullRequestAction extends AnAction {
 				components.repo(), commitHash);
 	}
 
-	private String getAuthToken() {
+	private String getBitbucketToken() {
 		JiraActionsPluginSettings settings = JiraActionsPluginSettings.getInstance();
-		return settings.getState().token;
+		return settings.getState().bitbucketToken;
 	}
 
 	private List<PullRequest> fetchPullRequests(@NotNull String apiUrl, @NotNull String authToken,
-			@NotNull String bitbucketBaseUrl) throws IOException {
-		HttpURLConnection connection = createConnection(apiUrl, authToken);
+			@NotNull String bitbucketBaseUrl) throws IOException, URISyntaxException {
 
-		try {
-			int responseCode = connection.getResponseCode();
-			if (responseCode == HTTP_OK) {
-				String response = readResponse(connection.getInputStream());
-				return parsePullRequestsResponse(response, bitbucketBaseUrl);
-			}
-			else {
-				logApiError(connection, responseCode);
-				return Collections.emptyList();
-			}
-		}
-		finally {
-			connection.disconnect();
-		}
-	}
+		String doneGet = HttpUtils.doGet(apiUrl, authToken).orElse(null);
 
-	private HttpURLConnection createConnection(@NotNull String apiUrl, @NotNull String authToken) throws IOException {
-		URL url = new URL(apiUrl);
-		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-		connection.setRequestMethod("GET");
-		connection.setRequestProperty("Authorization", BEARER_PREFIX + authToken);
-		connection.setRequestProperty("Accept", "application/json");
-		connection.setConnectTimeout(10000); // 10 seconds
-		connection.setReadTimeout(30000); // 30 seconds
-		return connection;
-	}
+		return (doneGet != null) ? parsePullRequestsResponse(doneGet, bitbucketBaseUrl) : Collections.emptyList();
 
-	private String readResponse(@NotNull InputStream inputStream) throws IOException {
-		StringBuilder response = new StringBuilder();
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-			String line;
-			while ((line = reader.readLine()) != null) {
-				response.append(line);
-			}
-		}
-		return response.toString();
-	}
-
-	private void logApiError(@NotNull HttpURLConnection connection, int responseCode) {
-		LOG.warn("API request failed with response code: " + responseCode);
-		try (InputStream errorStream = connection.getErrorStream()) {
-			if (errorStream != null) {
-				String errorResponse = readResponse(errorStream);
-				LOG.warn("Error response: " + errorResponse);
-			}
-		}
-		catch (IOException ex) {
-			LOG.debug("Could not read error response", ex);
-		}
 	}
 
 	private List<PullRequest> parsePullRequestsResponse(@NotNull String jsonResponse,

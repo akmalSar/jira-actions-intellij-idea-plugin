@@ -60,13 +60,16 @@ import org.jetbrains.annotations.Nullable;
  *
  * @author Akmal Sarhan
  */
+
 public class JiraConfigurationDialog implements Configurable {
 
 	private JTextField jiraBaseUrlField;
 
 	private JPanel mainPanel;
 
-	private JPasswordField tokenField;
+	private JPasswordField bitbucketTokenField;
+
+	private JPasswordField jiraTokenField;
 
 	@Override
 	@Nls(capitalization = Nls.Capitalization.Title)
@@ -110,42 +113,78 @@ public class JiraConfigurationDialog implements Configurable {
 		helpLabel.setForeground(Color.GRAY);
 		formPanel.add(helpLabel, gbc);
 
-		// Access Token Label
+		// JIRA Access Token Label
 		gbc.gridx = 0;
-		gbc.gridy = 2;
+		gbc.gridy = 4;
 		gbc.gridwidth = 1;
 		gbc.anchor = GridBagConstraints.WEST;
-		gbc.insets = new Insets(15, 5, 5, 5); // Extra top margin to separate from URL
-												// section
+		gbc.insets = new Insets(15, 5, 5, 5); // Extra top margin to separate from
+		// username section
 		gbc.fill = GridBagConstraints.NONE;
 		gbc.weightx = 0;
-		formPanel.add(new JLabel("Access Token:"), gbc);
+		formPanel.add(new JLabel("JIRA Access Token:"), gbc);
 
-		// Access Token Field
+		// JIRA Access Token Field
 		gbc.gridx = 1;
-		gbc.gridy = 2;
+		gbc.gridy = 4;
 		gbc.fill = GridBagConstraints.HORIZONTAL;
 		gbc.weightx = 1.0;
 		gbc.insets = new Insets(15, 5, 5, 5);
-		this.tokenField = new JPasswordField(30);
+		this.jiraTokenField = new JPasswordField(30);
 		// Load existing token if available
-		String existingToken = JiraActionsPluginSettings.getInstance().getState().token;
-		if (existingToken != null) {
-			this.tokenField.setText(existingToken);
+		String existingJiraToken = JiraActionsPluginSettings.getInstance().getState().jiraToken;
+		if (existingJiraToken != null) {
+			this.jiraTokenField.setText(existingJiraToken);
 		}
-		formPanel.add(this.tokenField, gbc);
+		formPanel.add(this.jiraTokenField, gbc);
 
-		// Help text for token
+		// Help text for JIRA token
 		gbc.gridx = 0;
-		gbc.gridy = 3;
+		gbc.gridy = 5;
 		gbc.gridwidth = 2;
 		gbc.fill = GridBagConstraints.NONE;
 		gbc.weightx = 0;
 		gbc.insets = new Insets(5, 5, 5, 5);
-		JLabel tokenHelpLabel = new JLabel(
-				"<html><i>Enter your Bitbucket/JIRA API token for authentication</i></html>");
-		tokenHelpLabel.setForeground(Color.GRAY);
-		formPanel.add(tokenHelpLabel, gbc);
+		JLabel jiraTokenHelpLabel = new JLabel("<html><i>Enter your JIRA API token for authentication</i></html>");
+		jiraTokenHelpLabel.setForeground(Color.GRAY);
+		formPanel.add(jiraTokenHelpLabel, gbc);
+
+		// Bitbucket Access Token Label
+		gbc.gridx = 0;
+		gbc.gridy = 6;
+		gbc.gridwidth = 1;
+		gbc.anchor = GridBagConstraints.WEST;
+		gbc.insets = new Insets(15, 5, 5, 5); // Extra top margin to separate from
+		// JIRA token section
+		gbc.fill = GridBagConstraints.NONE;
+		gbc.weightx = 0;
+		formPanel.add(new JLabel("Bitbucket Access Token:"), gbc);
+
+		// Bitbucket Access Token Field
+		gbc.gridx = 1;
+		gbc.gridy = 6;
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		gbc.weightx = 1.0;
+		gbc.insets = new Insets(15, 5, 5, 5);
+		this.bitbucketTokenField = new JPasswordField(30);
+		// Load existing token if available
+		String existingBitbucketToken = JiraActionsPluginSettings.getInstance().getState().bitbucketToken;
+		if (existingBitbucketToken != null) {
+			this.bitbucketTokenField.setText(existingBitbucketToken);
+		}
+		formPanel.add(this.bitbucketTokenField, gbc);
+
+		// Help text for Bitbucket token
+		gbc.gridx = 0;
+		gbc.gridy = 7;
+		gbc.gridwidth = 2;
+		gbc.fill = GridBagConstraints.NONE;
+		gbc.weightx = 0;
+		gbc.insets = new Insets(5, 5, 5, 5);
+		JLabel bitbucketTokenHelpLabel = new JLabel(
+				"<html><i>Enter your Bitbucket API token for authentication</i></html>");
+		bitbucketTokenHelpLabel.setForeground(Color.GRAY);
+		formPanel.add(bitbucketTokenHelpLabel, gbc);
 
 		this.mainPanel.add(formPanel, BorderLayout.NORTH);
 		return this.mainPanel;
@@ -162,18 +201,22 @@ public class JiraConfigurationDialog implements Configurable {
 		// Check if URL is modified
 		boolean urlModified = !Objects.equals(state.jiraBaseUrl, this.jiraBaseUrlField.getText());
 
-		// Check if token is modified
-		String currentToken = String.valueOf(this.tokenField.getPassword());
-		boolean tokenModified = !Objects.equals(state.token, currentToken);
+		// Check if JIRA token is modified
+		boolean jiraTokenModified = !Objects.equals(state.jiraToken, String.valueOf(this.jiraTokenField.getPassword()));
 
-		return urlModified || tokenModified;
+		// Check if Bitbucket token is modified
+		boolean bitbucketTokenModified = !Objects.equals(state.bitbucketToken,
+				String.valueOf(this.bitbucketTokenField.getPassword()));
+
+		return urlModified || jiraTokenModified || bitbucketTokenModified;
 	}
 
 	@Override
 	public void apply() throws ConfigurationException {
 		JiraActionsPluginSettings.State state = JiraActionsPluginSettings.getInstance().getState();
 		state.jiraBaseUrl = this.jiraBaseUrlField.getText();
-		state.token = String.valueOf(this.tokenField.getPassword());
+		state.jiraToken = String.valueOf(this.jiraTokenField.getPassword());
+		state.bitbucketToken = String.valueOf(this.bitbucketTokenField.getPassword());
 
 		// Ensure the state is persisted
 		JiraActionsPluginSettings.getInstance().loadState(state);
@@ -184,7 +227,8 @@ public class JiraConfigurationDialog implements Configurable {
 		if (this.mainPanel != null) {
 			JiraActionsPluginSettings.State state = JiraActionsPluginSettings.getInstance().getState();
 			this.jiraBaseUrlField.setText(state.jiraBaseUrl);
-			this.tokenField.setText((state.token != null) ? state.token : "");
+			this.jiraTokenField.setText((state.jiraToken != null) ? state.jiraToken : "");
+			this.bitbucketTokenField.setText((state.bitbucketToken != null) ? state.bitbucketToken : "");
 		}
 	}
 
@@ -192,7 +236,8 @@ public class JiraConfigurationDialog implements Configurable {
 	public void disposeUIResources() {
 		this.mainPanel = null;
 		this.jiraBaseUrlField = null;
-		this.tokenField = null;
+		this.jiraTokenField = null;
+		this.bitbucketTokenField = null;
 	}
 
 }

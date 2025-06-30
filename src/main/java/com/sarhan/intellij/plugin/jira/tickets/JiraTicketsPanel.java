@@ -32,7 +32,7 @@ import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 
 import com.intellij.ide.BrowserUtil;
-import com.intellij.openapi.components.ServiceManager;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.table.JBTable;
 import com.sarhan.intellij.plugin.jira.settings.JiraActionsPluginSettings;
@@ -52,7 +52,7 @@ public class JiraTicketsPanel extends JPanel {
 		this.project = project;
 		this.tableModel = new JiraTicketsTableModel();
 		this.table = new JBTable(this.tableModel);
-		this.jiraApiService = ServiceManager.getService(JiraApiService.class);
+		this.jiraApiService = ApplicationManager.getApplication().getService(JiraApiService.class);
 
 		setupUI();
 		setupTableClickListener();
@@ -65,10 +65,8 @@ public class JiraTicketsPanel extends JPanel {
 		this.table.setShowGrid(true);
 		this.table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
-		// Enable sorting
 		this.table.setAutoCreateRowSorter(true);
 
-		// Set column widths
 		this.table.getColumnModel().getColumn(0).setPreferredWidth(100); // Key
 		this.table.getColumnModel().getColumn(1).setPreferredWidth(300); // Summary
 		this.table.getColumnModel().getColumn(2).setPreferredWidth(100); // Status
@@ -77,7 +75,6 @@ public class JiraTicketsPanel extends JPanel {
 		JScrollPane scrollPane = new JScrollPane(this.table);
 		add(scrollPane, BorderLayout.CENTER);
 
-		// Add refresh button
 		JButton refreshButton = new JButton("Refresh");
 		refreshButton.addActionListener((ActionEvent e) -> refreshTickets());
 
@@ -107,7 +104,6 @@ public class JiraTicketsPanel extends JPanel {
 	}
 
 	private void refreshTickets() {
-		// You'll need to implement this method to get your JIRA configuration
 		JiraConfiguration config = getJiraConfiguration();
 
 		if (config != null) {

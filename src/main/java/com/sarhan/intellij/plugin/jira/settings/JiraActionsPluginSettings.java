@@ -22,7 +22,7 @@ import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
 
 /**
- * Provides persistent state management for Jira Actions plugin settings. This class is
+ * Provides persistent state management for Jira Buddy plugin settings. This class is
  * responsible for storing and retrieving configuration settings specific to the Jira
  * integration within the application.
  *

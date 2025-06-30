@@ -35,7 +35,6 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.ListPopup;
 import com.intellij.openapi.ui.popup.PopupStep;
@@ -90,9 +89,6 @@ public class BitbucketPullRequestAction extends AnAction {
 
 	private static final String BEARER_PREFIX = "Bearer ";
 
-	// Dependencies
-	private final Project project;
-
 	private final FileAnnotation annotation;
 
 	private final VirtualFile file;
@@ -101,18 +97,14 @@ public class BitbucketPullRequestAction extends AnAction {
 	public BitbucketPullRequestAction() {
 		super("Show Pull Requests for Commit", "Show pull requests for this commit from Bitbucket Server",
 				TasksIcons.Bug);
-		this.project = null;
 		this.annotation = null;
 		this.file = null;
-		logConstructorWarning();
 	}
 
 	// Main constructor
-	public BitbucketPullRequestAction(@NotNull Project project, @NotNull FileAnnotation annotation,
-			@NotNull VirtualFile file) {
+	public BitbucketPullRequestAction(@NotNull FileAnnotation annotation, @NotNull VirtualFile file) {
 		super("Show Pull Requests for Commit", "Show pull requests for this commit from Bitbucket Server",
 				TasksIcons.Bug);
-		this.project = project;
 		this.annotation = annotation;
 		this.file = file;
 	}
@@ -199,7 +191,7 @@ public class BitbucketPullRequestAction extends AnAction {
 
 	private GitRepository findGitRepository(@NotNull AnActionEvent event) {
 		if (this.file != null) {
-			return GitUtil.getRepositoryManager(this.project).getRepositoryForFile(this.file);
+			return GitUtil.getRepositoryManager(event.getProject()).getRepositoryForFile(this.file);
 		}
 
 		List<GitRepository> repositories = GitUtil.getRepositoryManager(event.getProject()).getRepositories();
@@ -391,12 +383,6 @@ public class BitbucketPullRequestAction extends AnAction {
 					components.repo(), prNumber);
 		}
 		return bitbucketBaseUrl + "/pull-requests/" + prNumber;
-	}
-
-	private void logConstructorWarning() {
-		LOG.warn("BitbucketPullRequestAction created with no project, annotation, or file");
-		LOG.warn("This should not happen and may cause unexpected behavior");
-		LOG.warn("Please report this issue: https://github.com/sarhan-sarhan/intellij-jira-actions-plugin");
 	}
 
 	// Helper record for URL components

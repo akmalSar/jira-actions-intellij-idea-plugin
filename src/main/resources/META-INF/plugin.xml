@@ -3,8 +3,8 @@
 	<!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
 	<id>com.sarhan.jira-actions-plugin</id>
 
-	<name>JiraActions</name>
-	<description>Jira Actions is an IntelliJ plugin that helps you with commit messages, navigation to the jira Ticket, pullrequests</description>
+	<name>Jira Buddy</name>
+	<description>Jira Buddy is an IntelliJ plugin that helps you with commit messages, navigation to the jira Ticket, pullrequests</description>
 	<!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
 	<vendor email="akmal.sarhan@gmail.com" url="https://github.com/akmalSar">Akmal Sarhan</vendor>
 
@@ -32,12 +32,12 @@
 		<applicationConfigurable groupId="tools"
 								 instance="com.sarhan.intellij.plugin.jira.settings.JiraConfigurationDialog"
 								 id="com.sarhan.intellij.plugin.jira.settings.JiraConfigurationDialog"
-								 displayName="Jira Actions"/>
-		<notificationGroup id="JIRA ACTIONS Plugin"
+								 displayName="Jira Buddy"/>
+		<notificationGroup id="JIRA BUDDY Plugin"
 						   displayType="BALLOON"/>
 	</extensions>
 	<actions>
-		<action id="JiraActions.FindPullRequests"
+		<action id="JiraBuddy.FindPullRequests"
 				class="com.sarhan.intellij.plugin.jira.pullrequest.BitbucketPullRequestAction">
 			<add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
 		</action>

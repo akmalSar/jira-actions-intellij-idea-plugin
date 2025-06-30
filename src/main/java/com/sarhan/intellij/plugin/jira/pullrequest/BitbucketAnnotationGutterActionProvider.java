@@ -47,7 +47,7 @@ public class BitbucketAnnotationGutterActionProvider implements AnnotationGutter
 			return null;
 		}
 
-		return new BitbucketPullRequestAction(project, annotation, file);
+		return new BitbucketPullRequestAction(annotation, file);
 	}
 
 }

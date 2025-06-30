@@ -1,6 +1,6 @@
-# 🔀 Jira Actions
+# 🔀 Jira Buddy
 <!-- Plugin description -->
-**JiraActions** is an IntelliJ plugin that helps you with commit messages, navigation to the jira Ticket, pullrequests etc  
+**Jira Buddy** is an IntelliJ plugin that helps you with commit messages, navigation to the jira Ticket, pullrequests etc  
 
 ---
 

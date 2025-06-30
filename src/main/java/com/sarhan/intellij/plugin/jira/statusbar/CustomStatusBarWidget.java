@@ -76,7 +76,7 @@ public class CustomStatusBarWidget implements StatusBarWidget, StatusBarWidget.I
 	// Lazy initialization of notification group
 	private NotificationGroup getNotificationGroup() {
 		if (this.notificationGroup == null) {
-			this.notificationGroup = NotificationGroupManager.getInstance().getNotificationGroup("JIRA ACTIONS Plugin");
+			this.notificationGroup = NotificationGroupManager.getInstance().getNotificationGroup("JIRA BUDDY Plugin");
 		}
 		return this.notificationGroup;
 	}
@@ -172,7 +172,7 @@ public class CustomStatusBarWidget implements StatusBarWidget, StatusBarWidget.I
 		JiraActionsPluginSettings.State settings = JiraActionsPluginSettings.getInstance().getState();
 		if (StringUtils.isBlank(settings.jiraBaseUrl)
 				|| "https://yourcompany.atlassian.net/browse/".equals(settings.jiraBaseUrl)) {
-			showNotification(project, "Please configure JIRA URL in Settings: Tools -> Jira Actions",
+			showNotification(project, "Please configure JIRA URL in Settings: Tools -> Jira Buddy",
 					NotificationType.ERROR);
 			return;
 		}
